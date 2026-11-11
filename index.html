@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IU CGPA Calculator</title>
+<meta name="description" content="Free CGPA calculator and printable marksheet generator for Islamic University, Kushtia-Jhenidah students.">
+<meta name="theme-color" content="#0a5a47">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="assets/icons/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IU CGPA">
+<link rel="stylesheet" href="css/style.css">
+<style id="pageStyle"></style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar no-print">
+    <div class="brand">
+      <img src="assets/logo.png" alt="" class="brand-logo" onerror="this.style.display='none'">
+      <div>
+        <h1>IU CGPA Calculator</h1>
+        <p>Islamic University, Kushtia-Jhenidah</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn light" id="btnInstall" hidden>Install app</button>
+      <details class="menu">
+        <summary class="btn light">Menu</summary>
+        <div class="menu-pop">
+          <button id="btnExport">Export my data (JSON)</button>
+          <button id="btnImport">Import data</button>
+          <button id="btnSample">Load sample data</button>
+          <button id="btnReset" class="danger">Reset everything</button>
+        </div>
+      </details>
+      <input type="file" id="fileImport" accept="application/json,.json" hidden>
+    </div>
+  </header>
+
+  <nav class="tabs no-print" id="tabs" aria-label="Sections">
+    <button data-tab="info" class="on">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg><span>Student</span></button>
+    <button data-tab="courses">
+      <svg viewBox="0 0 24 24"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h8M8 13h8"/></svg><span>Courses</span></button>
+    <button data-tab="results">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg><span>Results</span></button>
+    <button data-tab="print">
+      <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="9" rx="2"/><path d="M7 14h10v7H7z"/></svg><span>Print</span></button>
+    <button data-tab="tools">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/></svg><span>Tools</span></button>
+  </nav>
+
+  <main>
+
+    <!-- ============ 1. STUDENT INFO ============ -->
+    <section id="tab-info" class="panel active">
+      <div class="card">
+        <h2>Student information</h2>
+        <p class="hint">Everything you type stays on <b>your device</b> only. These details appear on the printed marksheet.</p>
+
+        <div class="grid2">
+          <div class="field"><label for="f-name">Your name</label>
+            <input id="f-name" data-info="name" autocomplete="off" placeholder="e.g. MD. RAHIM UDDIN"></div>
+          <div class="field"><label for="f-dob">Date of birth</label>
+            <input id="f-dob" data-info="dob" type="date"></div>
+          <div class="field"><label for="f-father">Father's name</label>
+            <input id="f-father" data-info="father" autocomplete="off"></div>
+          <div class="field"><label for="f-mother">Mother's name</label>
+            <input id="f-mother" data-info="mother" autocomplete="off"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Academic details</h2>
+        <div class="grid2">
+          <div class="field"><label for="f-faculty">Faculty</label>
+            <select id="f-faculty" data-info="facultyId"></select></div>
+          <div class="field"><label for="f-dept">Department</label>
+            <select id="f-dept" data-info="dept"></select>
+            <span class="err" data-err="dept"></span></div>
+          <div class="field" id="w-deptother" hidden><label for="f-deptother">Department name</label>
+            <input id="f-deptother" data-info="deptOther" placeholder="Type department name"></div>
+
+          <div class="field"><label for="f-degree">Degree</label>
+            <select id="f-degree" data-info="degreeId"></select>
+            <span class="err" data-err="degree"></span></div>
+          <div class="field" id="w-degcustom" hidden><label for="f-degcustom">Degree name</label>
+            <input id="f-degcustom" data-info="degreeCustom" placeholder="e.g. Diploma in ...">
+            <label for="f-deglevel" class="sub">Roll format follows</label>
+            <select id="f-deglevel" data-info="degreeCustomLevel">
+              <option value="bachelor">Bachelor (7-digit roll)</option>
+              <option value="master">Master's (6-digit roll)</option>
+            </select></div>
+
+          <div class="field"><label for="f-session">Session</label>
+            <select id="f-session" data-info="session"></select></div>
+          <div class="field"><label for="f-hall">Hall</label>
+            <select id="f-hall" data-info="hall"></select>
+            <span class="err" data-err="hall"></span></div>
+          <div class="field" id="w-hallother" hidden><label for="f-hallother">Hall name</label>
+            <input id="f-hallother" data-info="hallOther" placeholder="Type hall name"></div>
+
+          <div class="field"><label for="f-roll">Roll</label>
+            <input id="f-roll" data-info="roll" inputmode="numeric" autocomplete="off" placeholder="Digits only">
+            <span class="hint" id="rollHint">Choose your degree to see the roll format.</span>
+            <span class="err" data-err="roll"></span></div>
+          <div class="field"><label for="f-reg">Registration no.</label>
+            <input id="f-reg" data-info="reg" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="4 to 8 digits">
+            <span class="hint">4 to 8 digits</span>
+            <span class="err" data-err="reg"></span></div>
+        </div>
+      </div>
+
+      <div class="next-row">
+        <button class="btn primary" data-go="courses">Next: add courses →</button>
+      </div>
+    </section>
+
+    <!-- ============ 2. COURSES ============ -->
+    <section id="tab-courses" class="panel">
+      <div class="mini" id="miniSummary"></div>
+
+      <div class="card toolbar">
+        <div class="field">
+          <label>How will you enter results?</label>
+          <div class="seg" id="segMode">
+            <button data-mode="marks">Marks</button>
+            <button data-mode="letter">Letter grade</button>
+            <button data-mode="gp">Grade point</button>
+          </div>
+          <span class="hint">You can mix modes – each course keeps the way you last entered it.</span>
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optFail"> Count failed-course credits in CGPA <em>(as on IU marksheet)</em></label>
+          <label class="chk"><input type="checkbox" id="optDedupe"> Repeated course code → count only the best attempt</label>
+        </div>
+      </div>
+
+      <div id="yearsContainer"></div>
+
+      <div class="next-row">
+        <button class="btn ghost" id="btnAddYear">+ Add another year</button>
+        <button class="btn primary" data-go="results">See results →</button>
+      </div>
+    </section>
+
+    <!-- ============ 3. RESULTS ============ -->
+    <section id="tab-results" class="panel">
+      <div class="card"><div id="scopeResults"></div></div>
+      <div id="resultsBody"></div>
+    </section>
+
+    <!-- ============ 4. PRINT ============ -->
+    <section id="tab-print" class="panel">
+      <div class="card">
+        <h2>Print marksheet</h2>
+        <div id="scopePrint"></div>
+        <div class="grid3">
+          <div class="field"><label>Paper size</label>
+            <div class="seg" id="segPaper"><button data-paper="a4">A4</button><button data-paper="letter">Letter</button></div>
+            <span class="hint">Always printed in landscape.</span></div>
+          <div class="field"><label>On each page</label>
+            <div class="seg" id="segPer"><button data-per="semester">1 semester</button><button data-per="year">1 year (2 sem.)</button></div></div>
+          <div class="field"><label>Extras</label>
+            <div class="checks">
+              <label class="chk"><input type="checkbox" id="optSummary"> Add cumulative summary page</label>
+              <label class="chk"><input type="checkbox" id="optSemGpa"> Show GPA line under each semester</label>
+              <label class="chk"><input type="checkbox" id="optWm"> "UNOFFICIAL" watermark</label>
+            </div></div>
+        </div>
+        <div id="printWarn"></div>
+        <div class="print-actions">
+          <button class="btn primary big" id="btnPrint">Print / Save as PDF</button>
+          <span class="hint">In the print dialog pick <b>Save as PDF</b> to download. Margins are handled automatically.</span>
+        </div>
+      </div>
+      <div class="preview" id="preview"></div>
+    </section>
+
+    <!-- ============ 5. TOOLS ============ -->
+    <section id="tab-tools" class="panel">
+      <div class="card">
+        <h2>Target CGPA planner</h2>
+        <p class="hint">What average GPA do you need in the remaining credits to reach your target?</p>
+        <div class="grid2">
+          <div class="field"><label for="tp-cred">Credits completed so far</label><input id="tp-cred" type="number" step="any" min="0" inputmode="decimal"></div>
+          <div class="field"><label for="tp-cgpa">Current CGPA</label><input id="tp-cgpa" type="number" step="any" min="0" max="4" inputmode="decimal"></div>
+          <div class="field"><label for="tp-rem">Credits remaining</label><input id="tp-rem" type="number" step="any" min="0" inputmode="decimal"></div>
+          <div class="field"><label for="tp-target">Target CGPA</label><input id="tp-target" type="number" step="any" min="0" max="4" inputmode="decimal"></div>
+        </div>
+        <div class="row-actions"><button class="btn ghost" id="tp-use">Use my current data</button></div>
+        <div class="out" id="tp-out"></div>
+      </div>
+
+      <div class="card">
+        <h2>Marks → grade</h2>
+        <div class="field short"><label for="cv-marks">Total marks (out of 100)</label>
+          <input id="cv-marks" type="number" step="any" min="0" max="100" inputmode="decimal"></div>
+        <div class="out" id="cv-out"></div>
+      </div>
+
+      <div class="card">
+        <h2>Grading scale</h2>
+        <div class="table-wrap"><table class="plain" id="scaleTable"></table></div>
+      </div>
+
+      <div class="card">
+        <h2>How the numbers are calculated</h2>
+        <ul class="plainlist">
+          <li><b>PS</b> (point score) = Credit × Grade Point</li>
+          <li><b>TPS</b> = sum of all PS</li>
+          <li><b>EC</b> (earned credits) = credits of courses you passed</li>
+          <li><b>CGPA</b> = TPS ÷ total credits. By default failed-course credits stay in the divisor, exactly like the IU sample marksheet (53.125 ÷ 20 = 2.66). You can change this on the Courses tab.</li>
+          <li>Remarks come from the CGPA: the highest grade point in the scale that is not above it.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Install as an app</h2>
+        <p class="hint"><b>Android / Chrome:</b> tap <i>Install app</i> at the top (or ⋮ → Install app). <b>iPhone / Safari:</b> Share → <i>Add to Home Screen</i>. It then works offline too.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="no-print">
+    <p><b>Unofficial tool.</b> Made by a student for students. Results shown here and printed from here are <b>not</b> issued by the Islamic University administration and carry no official validity.</p>
+  </footer>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
