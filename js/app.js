@@ -727,12 +727,22 @@ $('.menu') && document.addEventListener('click', e => { const m = $('.menu'); if
 
 /* ------------------------------------------------------------------ install */
 let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('#btnInstall').hidden = false; });
+const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+function syncInstallBtn() { $('#btnInstall').hidden = isStandalone(); }
+syncInstallBtn();
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; syncInstallBtn(); });
 $('#btnInstall').addEventListener('click', async () => {
-  if (!deferredPrompt) return; deferredPrompt.prompt();
-  try { await deferredPrompt.userChoice; } catch (_) { }
-  deferredPrompt = null; $('#btnInstall').hidden = true;
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    try { await deferredPrompt.userChoice; } catch (_) { }
+    deferredPrompt = null; return;
+  }
+  // browser has not offered a one-tap install (iPhone, already installed, or offered earlier) – show manual steps
+  $('#installNote').textContent = 'Your browser did not offer one-tap install right now. Use one of these ways:';
+  const dlg = $('#installHelp');
+  if (dlg.showModal) dlg.showModal(); else alert('Open your browser menu and choose "Install app" or "Add to Home screen".');
 });
+$('#installClose').addEventListener('click', () => $('#installHelp').close());
 window.addEventListener('appinstalled', () => { $('#btnInstall').hidden = true; toast('App installed'); });
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => { });
 
