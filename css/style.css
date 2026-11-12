@@ -292,3 +292,12 @@ dialog#installHelp h3{margin-bottom:8px}
 
 .imgsave{display:inline-flex;gap:8px;align-items:center}
 .imgsave select{width:84px}
+
+dialog#imgDialog{border:1px solid var(--line);border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.25);padding:18px;max-width:560px;width:calc(100% - 24px);max-height:90vh;overflow:auto;color:var(--ink);background:#fff}
+dialog#imgDialog::backdrop{background:rgba(10,40,33,.5)}
+dialog#imgDialog h3{margin-bottom:6px}
+.imgfig{margin:12px 0 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fafcfb}
+.imgfig img{display:block;width:100%;height:auto;background:#fff}
+.imgfig figcaption{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px}
+.imgfig figcaption b{flex:1}
+@media print{dialog#imgDialog{display:none!important}}
