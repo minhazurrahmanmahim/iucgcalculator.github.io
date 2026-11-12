@@ -27,7 +27,7 @@
       </div>
     </div>
     <div class="top-actions">
-      <button class="btn light" id="btnInstall" hidden>Install app</button>
+      <button class="btn light" id="btnInstall">Install app</button>
       <details class="menu">
         <summary class="btn light">Menu</summary>
         <div class="menu-pop">
@@ -233,6 +233,17 @@
   </footer>
 </div>
 
+<dialog id="installHelp">
+  <h3>Install this app</h3>
+  <p class="hint" id="installNote"></p>
+  <ul class="plainlist">
+    <li><b>Android (Chrome):</b> tap the <b>⋮</b> menu → <i>Install app</i> (or <i>Add to Home screen</i>).</li>
+    <li><b>iPhone / iPad (Safari):</b> tap <b>Share</b> → <i>Add to Home Screen</i>.</li>
+    <li><b>Computer (Chrome / Edge):</b> click the install icon at the right end of the address bar.</li>
+  </ul>
+  <p class="hint">The page must be opened from the website link (https), not from a file on your device.</p>
+  <div class="row-actions"><button class="btn primary" id="installClose">Got it</button></div>
+</dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/data.js"></script>
