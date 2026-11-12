@@ -18,6 +18,8 @@ const ORD = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 
 const KEY = 'iu-cgpa-v1';
 const SCALE = IU.scale;
 const MAX_YEARS = 8;
+const YN = i => ORD[(state.years[i] ? state.years[i].no : i + 1) - 1];   // "Second" for the year at index i
+const yrNum = i => (state.years[i] ? state.years[i].no : i + 1);
 
 function toast(msg) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -35,13 +37,13 @@ function todayStr() {
 /* -------------------------------------------------------------------- state */
 function blankCourse() { return { id: uid(), code: '', name: '', credit: '', theory: '', inter: '', total: '', letter: '', gp: '', src: 'marks' }; }
 function blankSem(n = 5) { return { courses: Array.from({ length: n }, blankCourse) }; }
-function blankYear() { return { semesters: [blankSem(), blankSem()] }; }
+function blankYear(no) { return { no: no || 1, semesters: [blankSem(), blankSem()] }; }
 function defaultState() {
   return {
     v: 1,
     info: { name: '', father: '', mother: '', dob: '', facultyId: '', dept: '', deptOther: '', degreeId: '', degreeCustom: '', degreeCustomLevel: 'bachelor', hall: '', hallOther: '', session: '', roll: '', reg: '' },
     settings: { mode: 'marks', failInCgpa: true, dedupe: false },
-    years: [blankYear()],
+    years: [blankYear(1)],
     view: { scope: 'all', y: 0, s: 0, multi: [0] },
     print: { paper: 'a4', per: 'year', summary: true, watermark: false, semGpa: true }
   };
@@ -57,7 +59,8 @@ function merge(d, s) {
   if (!s || typeof s !== 'object') return d;
   ['info', 'settings', 'view', 'print'].forEach(k => { if (s[k] && typeof s[k] === 'object') d[k] = Object.assign(d[k], s[k]); });
   if (Array.isArray(s.years) && s.years.length) {
-    d.years = s.years.slice(0, MAX_YEARS).map(y => ({
+    d.years = s.years.slice(0, MAX_YEARS).map((y, yi) => ({
+      no: (y && y.no >= 1 && y.no <= MAX_YEARS) ? Math.floor(y.no) : yi + 1,
       semesters: [0, 1].map(i => {
         const sem = (y && y.semesters && y.semesters[i]) || {};
         const cs = Array.isArray(sem.courses) ? sem.courses : [];
@@ -139,7 +142,7 @@ function semData(ref) {
   const valid = evs.filter(e => e.valid);
   return {
     ref, valid, invalid: evs.filter(e => e.active && !e.valid).length,
-    label: `${ORD[ref.y]} Year – ${ORD[ref.s]} Semester`,
+    label: `${YN(ref.y)} Year – ${ORD[ref.s]} Semester`,
     sLabel: `${ORD[ref.s]} Semester`,
     aggr: aggregate(valid)
   };
@@ -308,7 +311,7 @@ function semHTML(sem, yi, si) {
 }
 function renderCourses() {
   $('#yearsContainer').innerHTML = state.years.map((y, yi) => `<section class="card year" data-y="${yi}">
-    <div class="year-head"><h3>${ORD[yi]} Year</h3><span class="stats" data-ystats></span>
+    <div class="year-head"><label class="yr-pick"><span class="sr">Which year is this?</span><select data-yearsel aria-label="Which year is this?">${ORD.slice(0, MAX_YEARS).map((n, k) => `<option value="${k + 1}" ${state.years[yi].no === k + 1 ? 'selected' : ''} ${state.years.some((o, j) => j !== yi && o.no === k + 1) ? 'disabled' : ''}>${n} Year</option>`).join('')}</select></label><span class="stats" data-ystats></span>
       <button class="btn small ghost danger" data-act="del-year" ${state.years.length < 2 ? 'disabled' : ''}>Remove year</button></div>
     ${y.semesters.map((s, si) => semHTML(s, yi, si)).join('')}</section>`).join('');
   $('#btnAddYear').disabled = state.years.length >= MAX_YEARS;
@@ -355,7 +358,19 @@ function setSrc(c, src) {
   if (src !== 'letter') c.letter = '';
   if (src !== 'gp') c.gp = '';
 }
+function sortYears() {
+  const v = state.view, cur = state.years[v.y], multi = v.multi.map(i => state.years[i]);
+  state.years.sort((a, b) => a.no - b.no);
+  v.y = Math.max(0, state.years.indexOf(cur));
+  v.multi = multi.map(y => state.years.indexOf(y)).filter(i => i >= 0).sort((a, b) => a - b);
+}
 const yearsEl = $('#yearsContainer');
+yearsEl.addEventListener('change', e => {
+  const t = e.target; if (!t.matches('[data-yearsel]')) return;
+  const yi = +t.closest('.year').dataset.y;
+  state.years[yi].no = +t.value; sortYears(); save(); renderCourses();
+  toast(`Set to ${ORD[+t.value - 1]} Year`);
+});
 yearsEl.addEventListener('input', e => {
   const t = e.target, f = t.dataset.f, row = t.closest('.crow');
   if (!f || !row) return;
@@ -380,10 +395,10 @@ yearsEl.addEventListener('click', e => {
   if (act === 'add-row') { sem.courses.push(blankCourse()); }
   else if (act === 'add-5') { for (let k = 0; k < 5; k++) sem.courses.push(blankCourse()); }
   else if (act === 'del-row') { sem.courses.splice(+b.closest('.crow').dataset.i, 1); if (!sem.courses.length) sem.courses.push(blankCourse()); }
-  else if (act === 'clear-sem') { if (!confirm(`Clear all courses in ${ORD[yi]} Year – ${ORD[si]} Semester?`)) return; sem.courses = [0, 1, 2, 3, 4].map(blankCourse); }
+  else if (act === 'clear-sem') { if (!confirm(`Clear all courses in ${YN(yi)} Year – ${ORD[si]} Semester?`)) return; sem.courses = [0, 1, 2, 3, 4].map(blankCourse); }
   else if (act === 'del-year') {
     if (state.years.length < 2) return;
-    if (!confirm(`Remove ${ORD[yi]} Year and all its courses?`)) return;
+    if (!confirm(`Remove ${YN(yi)} Year and all its courses?`)) return;
     state.years.splice(yi, 1); clampView(state);
   }
   save(); renderCourses();
@@ -391,8 +406,10 @@ yearsEl.addEventListener('click', e => {
 });
 $('#btnAddYear').addEventListener('click', () => {
   if (state.years.length >= MAX_YEARS) return;
-  state.years.push(blankYear()); save(); renderCourses();
-  toast(`${ORD[state.years.length - 1]} Year added`);
+  let no = 1; while (state.years.some(y => y.no === no)) no++;
+  const y = blankYear(no); state.years.push(y); sortYears(); save(); renderCourses();
+  toast(`${ORD[no - 1]} Year added`);
+  const el = $$('#yearsContainer .year')[state.years.indexOf(y)]; if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 $('#segMode').addEventListener('click', e => {
   const b = e.target.closest('[data-mode]'); if (!b) return;
@@ -409,12 +426,12 @@ function scopeHTML() {
   let ctl = '';
   if (v.scope === 'semester') {
     ctl = `<select data-scope-sel="sem" aria-label="Semester">${state.years.flatMap((y, yi) => y.semesters.map((_, si) =>
-      `<option value="${yi}-${si}" ${v.y === yi && v.s === si ? 'selected' : ''}>${ORD[yi]} Year – ${ORD[si]} Semester</option>`)).join('')}</select>`;
+      `<option value="${yi}-${si}" ${v.y === yi && v.s === si ? 'selected' : ''}>${YN(yi)} Year – ${ORD[si]} Semester</option>`)).join('')}</select>`;
   } else if (v.scope === 'year') {
-    ctl = `<select data-scope-sel="year" aria-label="Year">${state.years.map((_, i) => `<option value="${i}" ${v.y === i ? 'selected' : ''}>${ORD[i]} Year</option>`).join('')}</select>`;
+    ctl = `<select data-scope-sel="year" aria-label="Year">${state.years.map((_, i) => `<option value="${i}" ${v.y === i ? 'selected' : ''}>${YN(i)} Year</option>`).join('')}</select>`;
   } else if (v.scope === 'multi') {
     ctl = `<div class="checks" style="flex-direction:row;flex-wrap:wrap;gap:6px 16px">${state.years.map((_, i) =>
-      `<label class="chk"><input type="checkbox" data-scope-multi="${i}" ${v.multi.includes(i) ? 'checked' : ''}> ${ORD[i]} Year</label>`).join('')}</div>`;
+      `<label class="chk"><input type="checkbox" data-scope-multi="${i}" ${v.multi.includes(i) ? 'checked' : ''}> ${YN(i)} Year</label>`).join('')}</div>`;
   }
   return `<div class="scope"><div class="field"><label>Show result for</label><div class="seg">${seg}</div></div>${ctl ? `<div class="field">${ctl}</div>` : ''}</div>`;
 }
@@ -476,7 +493,7 @@ function renderResults() {
     <div class="stat-grid"><div><b>${a.n}</b><span>Courses</span></div><div><b>${fmt(a.credits, 2)}</b><span>Total credits</span></div><div><b>${fmt(a.ec, 2)}</b><span>Earned credits (EC)</span></div><div><b>${fmt(a.tps, 3)}</b><span>TPS</span></div></div></div>`;
   if (a.superseded) html += `<div class="notice">${a.superseded} earlier attempt${a.superseded > 1 ? 's' : ''} of repeated courses not counted (best grade used).</div>`;
 
-  const items = used.map(s => ({ label: `Y${s.ref.y + 1} S${s.ref.s + 1}`, val: s.aggr.cgpa || 0 }));
+  const items = used.map(s => ({ label: `Y${yrNum(s.ref.y)} S${s.ref.s + 1}`, val: s.aggr.cgpa || 0 }));
   const dist = SCALE.map(g => ({ g, n: a.used.filter(e => e.letter === g.letter).length })).filter(d => d.n);
   const maxN = Math.max(...dist.map(d => d.n), 1);
   html += `<div class="grid2"><div class="card chart"><h3>GPA by semester</h3>${gpaChart(items)}</div>
@@ -501,7 +518,7 @@ function renderResults() {
 document.addEventListener('click', e => {
   if (!e.target.closest('#btnCsv')) return;
   const rows = [['Year', 'Semester', 'Code', 'Course name', 'Credit', 'Marks', 'Letter grade', 'Grade point', 'PS']];
-  scopeRefs().map(semData).forEach(sd => sd.valid.forEach(e2 => rows.push([ORD[sd.ref.y], ORD[sd.ref.s], e2.code, e2.name, e2.credit, e2.total != null ? e2.total : '', e2.letter, e2.gp, e2.ps])));
+  scopeRefs().map(semData).forEach(sd => sd.valid.forEach(e2 => rows.push([YN(sd.ref.y), ORD[sd.ref.s], e2.code, e2.name, e2.credit, e2.total != null ? e2.total : '', e2.letter, e2.gp, e2.ps])));
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
   download('iu-cgpa-results.csv', '﻿' + csv, 'text/csv;charset=utf-8');
 });
@@ -610,13 +627,13 @@ function renderPrint() {
   const total = pages.length + (showSummary ? 1 : 0);
   let html = pages.map((p, idx) => {
     const a = aggregate(p.sems.flatMap(s => s.valid));
-    const inner = headHTML(iv, `${ORD[p.y]} year`, 'MARKS SHEET', legendHTML(p.sems)) + infoBlockHTML(iv)
+    const inner = headHTML(iv, `${YN(p.y)} year`, 'MARKS SHEET', legendHTML(p.sems)) + infoBlockHTML(iv)
       + p.sems.map(sd => semTableHTML(sd, state.print.semGpa)).join('') + sumRowHTML(a) + footHTML(idx + 1, total);
     return sheetShell(inner);
   }).join('');
   if (showSummary) {
     const a = aggregate(sds.flatMap(s => s.valid)), ys = sds.map(s => s.ref.y), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const yl = y0 === y1 ? `${ORD[y0]} year` : `${ORD[y0]} year – ${ORD[y1]} year`;
+    const yl = y0 === y1 ? `${YN(y0)} year` : `${YN(y0)} year – ${YN(y1)} year`;
     html += sheetShell(headHTML(iv, yl, 'CUMULATIVE RESULT', '') + infoBlockHTML(iv) + summaryTableHTML(sds, a) + sumRowHTML(a) + footHTML(total, total));
   }
   pv.innerHTML = html;
