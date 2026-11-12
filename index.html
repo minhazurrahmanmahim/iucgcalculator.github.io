@@ -175,7 +175,11 @@
         <div id="printWarn"></div>
         <div class="print-actions">
           <button class="btn primary big" id="btnPrint">Print / Save as PDF</button>
-          <span class="hint">In the print dialog pick <b>Save as PDF</b> to download. Margins are handled automatically.</span>
+          <span class="imgsave">
+            <button class="btn ghost big" id="btnImage">Save as image</button>
+            <select id="imgFmt" aria-label="Image format"><option value="png">PNG</option><option value="jpg">JPG</option></select>
+          </span>
+          <span class="hint">PDF: choose <b>Save as PDF</b> in the print dialog. Image: one file per page is downloaded.</span>
         </div>
       </div>
       <div class="preview" id="preview"></div>
