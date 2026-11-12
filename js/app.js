@@ -524,7 +524,7 @@ document.addEventListener('click', e => {
 });
 
 /* ---------------------------------------------------------------- marksheet */
-const PAPER = { a4: { w: '297mm', h: '210mm', px: 1122.52, css: 'A4 landscape' }, letter: { w: '11in', h: '8.5in', px: 1056, css: 'Letter landscape' } };
+const PAPER = { a4: { w: '297mm', h: '210mm', px: 1122.52, py: 793.7, css: 'A4 landscape' }, letter: { w: '11in', h: '8.5in', px: 1056, py: 816, css: 'Letter landscape' } };
 
 function scaleTableHTML() {
   return `<table class="g-scale"><thead><tr><th>Numerical Grade</th><th>Letter Grade</th><th>GP</th><th>Remarks</th></tr></thead><tbody>${SCALE.map(g =>
@@ -619,7 +619,7 @@ function renderPrint() {
   if (missing.length && !Object.keys(errs).length) warn.push(`<div class="notice">Not filled yet: ${missing.join(', ')}. <a data-go="info">Add them</a> or print with blanks.</div>`);
   if (invalid) warn.push(`<div class="notice">${invalid} incomplete course row${invalid > 1 ? 's' : ''} will be left out. <a data-go="courses">Fix in Courses</a></div>`);
   $('#printWarn').innerHTML = warn.join('');
-  $('#btnPrint').disabled = !pages.length || Object.keys(errs).length > 0;
+  $('#btnPrint').disabled = $('#btnImage').disabled = !pages.length || Object.keys(errs).length > 0;
 
   if (!pages.length) { pv.innerHTML = '<div class="empty">Nothing to print yet — add some complete courses first.</div>'; return; }
 
@@ -649,6 +649,56 @@ $('#btnPrint').addEventListener('click', () => {
   const iv = infoView();
   if (!iv.name && !confirm('Your name is empty. Print anyway?')) return;
   fitSheets(); setTimeout(() => window.print(), 60);
+});
+/* ---- save marksheet pages as PNG / JPG (no external library: SVG foreignObject -> canvas) ---- */
+let cssCache = null;
+async function getCss() {
+  if (cssCache) return cssCache;
+  try { const r = await fetch('css/style.css'); if (r.ok) return (cssCache = await r.text()); } catch (_) { }
+  let t = ''; try { for (const sh of document.styleSheets) for (const r of sh.cssRules) t += r.cssText + '\n'; } catch (_) { }
+  return (cssCache = t);
+}
+function blobToDataURL(b) { return new Promise(res => { const f = new FileReader(); f.onload = () => res(f.result); f.onerror = () => res(''); f.readAsDataURL(b); }); }
+async function logoDataURL() {
+  try { const r = await fetch(IU.logo); if (!r.ok) return ''; return await blobToDataURL(await r.blob()); } catch (_) { return ''; }
+}
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('render')); i.src = src; }); }
+async function sheetToBlob(sheet, fmt, css, logo) {
+  const P = PAPER[state.print.paper], W = Math.round(P.px), H = Math.round(P.py), SCALE = 2;
+  const clone = sheet.cloneNode(true);
+  clone.style.transform = 'none'; clone.style.width = P.w; clone.style.height = P.h;
+  $$('img.t-logo', clone).forEach(im => { if (logo) im.setAttribute('src', logo); else im.remove(); });
+  const wrap = document.createElement('div');
+  wrap.setAttribute('style', `--pw:${P.w};--ph:${P.h};--s:1;width:${W}px;height:${H}px;overflow:hidden;background:#fff`);
+  wrap.appendChild(clone);
+  const xhtml = new XMLSerializer().serializeToString(wrap).replace(/^<div /, '<div xmlns="http://www.w3.org/1999/xhtml" ');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject x="0" y="0" width="100%" height="100%"><style><![CDATA[${css.replace(/@media\s+print\s*\{[\s\S]*$/, '')}]]></style>${xhtml}</foreignObject></svg>`;
+  const img = await loadImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+  const cv = document.createElement('canvas'); cv.width = W * SCALE; cv.height = H * SCALE;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+  return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('blob')), fmt === 'jpg' ? 'image/jpeg' : 'image/png', 0.95));
+}
+function downloadBlob(name, blob) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+}
+$('#btnImage').addEventListener('click', async () => {
+  const btn = $('#btnImage'), sheets = $$('#preview .sheet'), fmt = $('#imgFmt').value;
+  if (!sheets.length) return;
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Preparing…';
+  try {
+    fitSheets();
+    const [css, logo] = await Promise.all([getCss(), logoDataURL()]);
+    const iv = infoView(), base = 'IU-Marksheet-' + ((iv.roll || iv.name || 'result').replace(/[^\w-]+/g, '_'));
+    for (let i = 0; i < sheets.length; i++) {
+      const blob = await sheetToBlob(sheets[i], fmt, css, logo);
+      downloadBlob(`${base}-page${i + 1}.${fmt}`, blob);
+      if (i < sheets.length - 1) await new Promise(r => setTimeout(r, 500));
+    }
+    toast(sheets.length > 1 ? `${sheets.length} images saved` : 'Image saved');
+  } catch (e) { toast('Could not make the image on this browser. Use Print → Save as PDF instead.'); }
+  btn.textContent = old; btn.disabled = false;
 });
 window.addEventListener('beforeprint', () => { if (curTab !== 'print') { renderScopes(); curTab = 'print'; $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-print')); renderPrint(); } fitSheets(); });
 window.addEventListener('resize', () => { if (curTab === 'print') updateScale(); });
