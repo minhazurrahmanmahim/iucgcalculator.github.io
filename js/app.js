@@ -650,33 +650,156 @@ $('#btnPrint').addEventListener('click', () => {
   if (!iv.name && !confirm('Your name is empty. Print anyway?')) return;
   fitSheets(); setTimeout(() => window.print(), 60);
 });
-/* ---- save marksheet pages as PNG / JPG (no external library: SVG foreignObject -> canvas) ---- */
-let cssCache = null;
-async function getCss() {
-  if (cssCache) return cssCache;
-  try { const r = await fetch('css/style.css'); if (r.ok) return (cssCache = await r.text()); } catch (_) { }
-  let t = ''; try { for (const sh of document.styleSheets) for (const r of sh.cssRules) t += r.cssText + '\n'; } catch (_) { }
-  return (cssCache = t);
+/* ---- save marksheet pages as PNG / JPG: drawn directly on a canvas (works in every browser, no libraries) ---- */
+const FONT = 'Arial, Helvetica, sans-serif';
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = src; }); }
+function setFont(c, size, b) { c.font = `${b ? 'bold ' : ''}${size}px ${FONT}`; }
+function tw(c, s, size, b) { setFont(c, size, b); return c.measureText(String(s)).width; }
+function T(c, s, x, y, o = {}) {
+  let size = o.size || 12, str = String(s == null ? '' : s);
+  setFont(c, size, o.b);
+  if (o.max) {
+    while (c.measureText(str).width > o.max && size > (o.min || 7)) { size -= 0.5; setFont(c, size, o.b); }
+    if (c.measureText(str).width > o.max) { while (str.length > 1 && c.measureText(str + '…').width > o.max) str = str.slice(0, -1); str += '…'; }
+  }
+  c.fillStyle = o.color || '#000'; c.textAlign = o.align || 'left'; c.textBaseline = 'alphabetic';
+  c.fillText(str, x, y);
 }
-function blobToDataURL(b) { return new Promise(res => { const f = new FileReader(); f.onload = () => res(f.result); f.onerror = () => res(''); f.readAsDataURL(b); }); }
-async function logoDataURL() {
-  try { const r = await fetch(IU.logo); if (!r.ok) return ''; return await blobToDataURL(await r.blob()); } catch (_) { return ''; }
+function hline(c, x1, x2, y, w) { c.strokeStyle = '#000'; c.lineWidth = w || 1; c.beginPath(); c.moveTo(x1, y); c.lineTo(x2, y); c.stroke(); }
+function rbox(c, x, y, w, h, lw) { c.strokeStyle = '#000'; c.lineWidth = lw || 1; c.strokeRect(x, y, w, h); }
+
+function drawHeader(c, w, iv, yearLine, boxText, legendSems, logo) {
+  const lw = w * 0.29, cx = w * 0.5, rx = w * 0.725, rw = w - rx;
+  // grading scale table (left)
+  const rh = 15, cols = [0.33, 0.2, 0.14, 0.33].map(f => f * lw);
+  const rows = [['Numerical Grade', 'Letter Grade', 'GP', 'Remarks'], ...SCALE.map(g => [g.range, g.letter, g.gp.toFixed(2), g.remark])];
+  let ty = 0;
+  rows.forEach((r, ri) => { let x = 0; r.forEach((cell, ci) => { rbox(c, x, ty, cols[ci], rh, 0.8); T(c, cell, x + cols[ci] / 2, ty + rh - 4.5, { size: 9, b: ri === 0, align: 'center', max: cols[ci] - 4, min: 6 }); x += cols[ci]; }); ty += rh; });
+  let leftH = ty;
+  // centre block
+  const cmax = w * 0.42; let cy = 24;
+  T(c, IU.universityName, cx, cy, { size: 26, align: 'center', max: cmax });
+  cy += 22; T(c, IU.universityPlace, cx, cy, { size: 15, align: 'center', max: cmax });
+  cy += 8;
+  if (logo) { const lh = 56, lwd = logo.width * lh / logo.height; c.drawImage(logo, cx - lwd / 2, cy, lwd, lh); cy += lh + 6; } else cy += 4;
+  if (iv.faculty) { cy += 13; T(c, iv.faculty, cx, cy, { size: 12, align: 'center', max: cmax }); }
+  if (iv.dept) { cy += 20; T(c, 'Department of ' + iv.dept, cx, cy, { size: 16.5, align: 'center', max: cmax }); }
+  if (iv.degFull) { cy += 20; T(c, iv.degFull, cx, cy, { size: 16.5, align: 'center', max: cmax }); }
+  cy += 20; T(c, yearLine, cx, cy, { size: 16.5, b: true, align: 'center', max: cmax });
+  cy += 12; const bw = tw(c, boxText, 14, true) + 34; rbox(c, cx - bw / 2, cy, bw, 24, 1); T(c, boxText, cx, cy + 17, { size: 14, b: true, align: 'center' }); cy += 24;
+  // course-name legend (right)
+  let rightH = 0;
+  if (legendSems.length) {
+    const gap = 8, tW = (rw - gap * (legendSems.length - 1)) / legendSems.length, rr = 13;
+    legendSems.forEach((sd, k) => {
+      const x0 = rx + k * (tW + gap), c1 = tW * 0.36; let yy = 0;
+      [['h', sd.sLabel], ['h2']].forEach(() => { });
+      rbox(c, x0, yy, tW, rr, 0.7); T(c, sd.sLabel, x0 + tW / 2, yy + rr - 3.5, { size: 8.5, b: true, align: 'center' }); yy += rr;
+      rbox(c, x0, yy, c1, rr, 0.7); rbox(c, x0 + c1, yy, tW - c1, rr, 0.7);
+      T(c, 'Code', x0 + c1 / 2, yy + rr - 3.5, { size: 8.5, b: true, align: 'center' }); T(c, 'Name', x0 + c1 + (tW - c1) / 2, yy + rr - 3.5, { size: 8.5, b: true, align: 'center' }); yy += rr;
+      sd.valid.forEach(e => {
+        rbox(c, x0, yy, c1, rr, 0.7); rbox(c, x0 + c1, yy, tW - c1, rr, 0.7);
+        T(c, e.code, x0 + 3, yy + rr - 3.5, { size: 8, max: c1 - 5, min: 5.5 }); T(c, e.name, x0 + c1 + 3, yy + rr - 3.5, { size: 8, max: tW - c1 - 6, min: 5.5 }); yy += rr;
+      });
+      rightH = Math.max(rightH, yy);
+    });
+  }
+  return Math.max(leftH, cy, rightH) + 14;
 }
-function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('render')); i.src = src; }); }
-async function sheetToBlob(sheet, fmt, css, logo) {
-  const P = PAPER[state.print.paper], W = Math.round(P.px), H = Math.round(P.py), SCALE = 2;
-  const clone = sheet.cloneNode(true);
-  clone.style.transform = 'none'; clone.style.width = P.w; clone.style.height = P.h;
-  $$('img.t-logo', clone).forEach(im => { if (logo) im.setAttribute('src', logo); else im.remove(); });
-  const wrap = document.createElement('div');
-  wrap.setAttribute('style', `--pw:${P.w};--ph:${P.h};--s:1;width:${W}px;height:${H}px;overflow:hidden;background:#fff`);
-  wrap.appendChild(clone);
-  const xhtml = new XMLSerializer().serializeToString(wrap).replace(/^<div /, '<div xmlns="http://www.w3.org/1999/xhtml" ');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject x="0" y="0" width="100%" height="100%"><style><![CDATA[${css.replace(/@media\s+print\s*\{[\s\S]*$/, '')}]]></style>${xhtml}</foreignObject></svg>`;
-  const img = await loadImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
-  const cv = document.createElement('canvas'); cv.width = W * SCALE; cv.height = H * SCALE;
-  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
-  return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('blob')), fmt === 'jpg' ? 'image/jpeg' : 'image/png', 0.95));
+function drawInfo(c, w, iv, y) {
+  const xs = [0, 0.33, 0.58, 0.79].map(f => f * w);
+  const items = [[['Name', iv.name], ['Hall Name', iv.hall]], [["Father's Name", iv.father], ['Roll', iv.roll]], [["Mother's Name", iv.mother], ['Reg', iv.reg]], [['Date of Birth', iv.dob], ['Session', iv.session]]];
+  items.forEach((pair, i) => {
+    const x = xs[i], nx = i < 3 ? xs[i + 1] : w, lbl = Math.max(...pair.map(p => tw(c, p[0], 12, true))) + 8;
+    pair.forEach((p, r) => { const yy = y + 14 + r * 21; T(c, p[0], x, yy, { size: 12, b: true }); T(c, ': ' + String(p[1] || '').toUpperCase(), x + lbl, yy, { size: 12, max: nx - x - lbl - 10, min: 7 }); });
+  });
+  return y + 14 + 21 + 14;
+}
+function drawSemTable(c, w, sd, y, showGpa) {
+  const cs = sd.valid, n = cs.length, labW = Math.min(112, w * 0.12), colW = (w - labW) / n, fs = Math.max(7, Math.min(12.5, colW / 7));
+  T(c, sd.sLabel, w / 2, y + 14, { size: 13, b: true, align: 'center' }); y += 26;
+  cs.forEach((e, i) => { const x = labW + i * colW + 3; T(c, e.code, x, y + 11, { size: fs, max: colW - 5, min: 6 }); T(c, fmt(e.credit, 2), x, y + 26, { size: fs }); });
+  y += 33; hline(c, 0, w, y, 0.9);
+  const hasT = cs.some(e => e.theory !== '' && e.theory != null), hasI = cs.some(e => e.inter !== '' && e.inter != null), hasTot = cs.some(e => e.total != null);
+  const mv = v => (v === '' || v == null) ? '–' : fmt(v, 2);
+  const rows = [];
+  if (hasT) rows.push(['Theory', e => mv(e.theory)]);
+  if (hasI) rows.push(['Inter. Theory', e => mv(e.inter)]);
+  if (hasTot) rows.push(['Total Marks', e => e.total != null ? fmt(e.total, 2) : '–']);
+  rows.push(['Letter Grade', e => e.letter], ['Grade Point', e => fmt(e.gp, 2)], ['PS', e => fmt(e.ps, 3)]);
+  rows.forEach(([lab, fn]) => {
+    y += 21; T(c, lab, 4, y - 6, { size: 12, max: labW - 8, min: 7 });
+    cs.forEach((e, i) => T(c, fn(e), labW + i * colW + 3, y - 6, { size: fs, max: colW - 5, min: 6 }));
+  });
+  y += 4;
+  if (showGpa) {
+    const a = sd.aggr; y += 12;
+    T(c, `Semester summary — TPS: ${fmt(a.tps, 3)}  ·  Credits: ${fmt(a.credits, 2)}  ·  EC: ${fmt(a.ec, 2)}  ·  GPA: ${a.cgpa == null ? '–' : fmt(a.cgpa, 2)}`, 0, y, { size: 10.5, color: '#222', max: w });
+    y += 6;
+  }
+  return y + 6;
+}
+function drawSummaryTable(c, w, sds, a, y) {
+  T(c, 'Semester-wise summary', w / 2, y + 14, { size: 13, b: true, align: 'center' }); y += 38;
+  const xs = [0, 0.38, 0.52, 0.66, 0.80, 0.92].map(f => f * w), heads = ['Year / Semester', 'Courses', 'Credits', 'EC', 'TPS', 'GPA'];
+  heads.forEach((h, i) => T(c, h, xs[i] + 3, y, { size: 12 })); y += 7; hline(c, 0, w, y, 0.9);
+  const row = (vals, bold) => { y += 22; vals.forEach((v, i) => T(c, v, xs[i] + 3, y - 6, { size: 12, b: bold })); };
+  sds.forEach(sd => row([sd.label, sd.aggr.n, fmt(sd.aggr.credits, 2), fmt(sd.aggr.ec, 2), fmt(sd.aggr.tps, 3), sd.aggr.cgpa == null ? '–' : fmt(sd.aggr.cgpa, 2)]));
+  y += 6; hline(c, 0, w, y, 0.9);
+  row(['Overall', a.n, fmt(a.credits, 2), fmt(a.ec, 2), fmt(a.tps, 3), a.cgpa == null ? '–' : fmt(a.cgpa, 2)], true);
+  return y + 8;
+}
+function drawTotals(c, w, a, y) {
+  y += 12;
+  [['TPS', fmt(a.tps, 3), 0], ['EC', fmt(a.ec, 3), w * 0.33], ['CGPA', a.cgpa == null ? '–' : fmt(a.cgpa, 2), w * 0.6]].forEach(([l, v, x]) => {
+    T(c, l, x, y + 14, { size: 13.5, b: true }); T(c, v, x + tw(c, l, 13.5, true) + 14, y + 14, { size: 13.5 });
+  });
+  const val = a.remark || '', vw = tw(c, val, 13.5), lw = tw(c, 'Remarks', 13.5, true);
+  T(c, val, w, y + 14, { size: 13.5, align: 'right' }); T(c, 'Remarks', w - vw - 14 - lw, y + 14, { size: 13.5, b: true });
+  y += 30;
+  if (a.superseded) { T(c, 'Repeated courses: only the best attempt is counted in the totals above.', 0, y + 8, { size: 9.5, color: '#333' }); y += 14; }
+  return y;
+}
+function drawFooterBox(c, w, y, idx, total) {
+  y += 8; const h = 66; rbox(c, 0, y, w, h, 1.3);
+  T(c, 'This is NOT a marksheet issued by the University administration.', w / 2, y + 25, { size: 15, b: true, align: 'center', max: w - 20 });
+  T(c, 'Unofficial CGPA calculation prepared by the student for personal reference only. It carries no official seal or signature and has no official validity.', w / 2, y + 43, { size: 11.5, align: 'center', max: w - 20, min: 7 });
+  T(c, `Generated on ${todayStr()}  ·  IU CGPA Calculator  ·  Page ${idx} of ${total}`, w / 2, y + 58, { size: 10, color: '#333', align: 'center' });
+  return y + h;
+}
+function drawPage(c, w, spec, iv, logo) {
+  let y = 0;
+  if (spec.kind === 'sem') {
+    y = drawHeader(c, w, iv, spec.yearLine, 'MARKS SHEET', spec.sems.some(sd => sd.valid.some(e => e.name)) ? spec.sems : [], logo);
+    y = drawInfo(c, w, iv, y);
+    spec.sems.forEach(sd => { y = drawSemTable(c, w, sd, y, state.print.semGpa); });
+  } else {
+    y = drawHeader(c, w, iv, spec.yearLine, 'CUMULATIVE RESULT', [], logo);
+    y = drawInfo(c, w, iv, y);
+    y = drawSummaryTable(c, w, spec.sds, spec.agg, y);
+  }
+  y = drawTotals(c, w, spec.agg, y);
+  return drawFooterBox(c, w, y, spec.idx, spec.total);
+}
+function printSpecs() {
+  const { pages, sds } = buildPages(), showSummary = state.print.summary && sds.length > 1, total = pages.length + (showSummary ? 1 : 0);
+  const specs = pages.map((p, i) => ({ kind: 'sem', sems: p.sems, agg: aggregate(p.sems.flatMap(s => s.valid)), yearLine: `${YN(p.y)} year`, idx: i + 1, total }));
+  if (showSummary) {
+    const ys = sds.map(s => s.ref.y), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    specs.push({ kind: 'sum', sds, agg: aggregate(sds.flatMap(s => s.valid)), yearLine: y0 === y1 ? `${YN(y0)} year` : `${YN(y0)} year – ${YN(y1)} year`, idx: total, total });
+  }
+  return specs;
+}
+function renderPageCanvas(spec, iv, logo) {
+  const P = PAPER[state.print.paper], W = Math.round(P.px), H = Math.round(P.py), S = 2, mx = 38, my = 28;
+  const probe = document.createElement('canvas').getContext('2d');
+  const h1 = drawPage(probe, W - 2 * mx, spec, iv, logo), k = Math.min(1, (H - 2 * my) / h1);
+  const cv = document.createElement('canvas'); cv.width = W * S; cv.height = H * S;
+  const c = cv.getContext('2d'); c.scale(S, S); c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
+  if (state.print.watermark) { c.save(); c.translate(W / 2, H / 2); c.rotate(-24 * Math.PI / 180); c.fillStyle = 'rgba(0,0,0,0.055)'; c.font = `bold 110px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('UNOFFICIAL', 0, 0); c.restore(); }
+  c.translate(mx, my); c.scale(k, k);
+  drawPage(c, (W - 2 * mx) / k, spec, iv, logo);
+  return cv;
 }
 function downloadBlob(name, blob) {
   const url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -697,13 +820,14 @@ $('#btnImage').addEventListener('click', async () => {
   if (!sheets.length) return;
   btn.disabled = true; const old = btn.textContent; btn.textContent = 'Preparing…';
   try {
-    fitSheets();
-    const [css, logo] = await Promise.all([getCss(), logoDataURL()]);
+    const specs = printSpecs(); if (!specs.length) throw new Error('nothing to save');
+    let logo = null; try { logo = await loadImg(IU.logo); } catch (_) { }
     const iv = infoView(), base = 'IU-Marksheet-' + ((iv.roll || iv.name || 'result').replace(/[^\w-]+/g, '_'));
     closeImgDialog(); imgUrls = [];
-    for (let i = 0; i < sheets.length; i++) {
-      const blob = await sheetToBlob(sheets[i], fmt, css, logo), name = `${base}-page${i + 1}.${fmt}`;
-      const file = new File([blob], name, { type: blob.type });
+    for (let i = 0; i < specs.length; i++) {
+      const cv = renderPageCanvas(specs[i], iv, logo);
+      const blob = await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('blob')), fmt === 'jpg' ? 'image/jpeg' : 'image/png', 0.95));
+      const name = `${base}-page${i + 1}.${fmt}`, file = new File([blob], name, { type: blob.type });
       imgUrls.push({ url: URL.createObjectURL(blob), name, file });
     }
     const canShare = !!(navigator.canShare && navigator.canShare({ files: [imgUrls[0].file] }));
