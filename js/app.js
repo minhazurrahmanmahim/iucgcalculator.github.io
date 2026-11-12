@@ -646,6 +646,7 @@ function renderPrint() {
   pv.innerHTML = html;
   updateScale();
   requestAnimationFrame(() => { fitSheets(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (curTab === 'print') fitSheets(); });
 }
 $('#segPaper').addEventListener('click', e => { const b = e.target.closest('[data-paper]'); if (!b) return; state.print.paper = b.dataset.paper; save(); renderPrint(); });
 $('#segPer').addEventListener('click', e => { const b = e.target.closest('[data-per]'); if (!b) return; state.print.per = b.dataset.per; save(); renderPrint(); });
@@ -657,7 +658,8 @@ $('#btnPrint').addEventListener('click', () => {
   fitSheets(); setTimeout(() => window.print(), 60);
 });
 /* ---- save marksheet pages as PNG / JPG: drawn directly on a canvas (works in every browser, no libraries) ---- */
-const FONT = 'Arial, Helvetica, sans-serif';
+const FONT = '"IUSheet", Arial, Helvetica, sans-serif';
+async function loadSheetFonts() { try { await Promise.all([document.fonts.load('12px IUSheet'), document.fonts.load('bold 12px IUSheet')]); await document.fonts.ready; } catch (_) { } }
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('image')); i.src = src; }); }
 function setFont(c, size, b) { c.font = `${b ? 'bold ' : ''}${size}px ${FONT}`; }
 function tw(c, s, size, b) { setFont(c, size, b); return c.measureText(String(s)).width; }
@@ -824,6 +826,7 @@ $('#btnImage').addEventListener('click', async () => {
   btn.disabled = true; const old = btn.textContent; btn.textContent = 'Preparing…';
   try {
     const specs = printSpecs(); if (!specs.length) throw new Error('nothing to save');
+    await loadSheetFonts();
     let logo = null; try { logo = await loadImg(IU.logo); } catch (_) { }
     const iv = infoView(), base = 'IU-Marksheet-' + ((iv.roll || iv.name || 'result').replace(/[^\w-]+/g, '_'));
     closeImgDialog(); imgUrls = [];
