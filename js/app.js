@@ -10,9 +10,11 @@ const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
 const num = v => (v === '' || v == null) ? NaN : Number(v);
+const rHU = x => Math.floor(x + 0.5 + 1e-9);   // round half up: 35.5 -> 36, 35.25 -> 35
 const r2 = x => Math.round((x + 1e-9) * 100) / 100;
 const r4 = x => Math.round((x + 1e-9) * 10000) / 10000;
 const sum = a => r4(a.reduce((p, c) => p + c, 0));
+const fmtCredit = v => Number.isInteger(v) ? v.toFixed(1) : String(parseFloat(Number(v).toFixed(2)));   // 3 -> 3.0, 1.5 -> 1.5
 const fmt = (x, d = 3) => (x == null || isNaN(x)) ? '–' : String(parseFloat(Number(x).toFixed(d)));
 const ORD = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth'];
 const KEY = 'iu-cgpa-v1';
@@ -45,7 +47,7 @@ function defaultState() {
     settings: { mode: 'marks', failInCgpa: true, dedupe: false },
     years: [blankYear(1)],
     view: { scope: 'all', y: 0, s: 0, multi: [0] },
-    print: { paper: 'a4', per: 'year', summary: true, watermark: false, semGpa: true }
+    print: { paper: 'a4', per: 'year', summary: true, watermark: false }
   };
 }
 function clampView(st) {
@@ -105,7 +107,7 @@ function evalCourse(c) {
     const t = num(c.total);
     if (isNaN(t)) errs.push('Enter the marks');
     else if (t < 0 || t > 100) errs.push('Total marks must be between 0 and 100');
-    else { g = gradeFromPercent(t); out.total = t; }
+    else { const tr = rHU(t); g = gradeFromPercent(tr); out.total = tr; }
   } else if (c.src === 'letter') {
     if (!c.letter) errs.push('Select a grade'); else g = gradeByLetter(c.letter);
   } else {
@@ -382,10 +384,16 @@ yearsEl.addEventListener('input', e => {
   c[f] = v;
   if (f === 'theory' || f === 'inter') {
     const a = num(c.theory), b = num(c.inter);
-    c.total = (isNaN(a) && isNaN(b)) ? '' : String(r4((isNaN(a) ? 0 : a) + (isNaN(b) ? 0 : b)));
+    c.total = (isNaN(a) && isNaN(b)) ? '' : String(rHU(r4((isNaN(a) ? 0 : a) + (isNaN(b) ? 0 : b))));
     const tot = $('[data-f="total"]', row); if (tot) tot.value = c.total;
   }
   save(); refreshCourseDom();
+});
+yearsEl.addEventListener('change', e => {
+  const t = e.target; if (t.dataset.f !== 'total') return;
+  const v = num(t.value); if (isNaN(v)) return;
+  const row = t.closest('.crow'), c = getCourse(row), r = rHU(v);
+  if (String(r) !== t.value) { t.value = String(r); c.total = String(r); save(); refreshCourseDom(); }
 });
 yearsEl.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -549,16 +557,15 @@ function infoBlockHTML(iv) {
   const b = (a, c) => `<div class="ib"><span class="l">${a[0]}</span><span class="v">: ${esc(a[1])}</span><span class="l">${c[0]}</span><span class="v">: ${esc(c[1])}</span></div>`;
   return `<div class="sh-info">${b(['Name', iv.name], ['Hall Name', iv.hall])}${b(["Father's Name", iv.father], ['Roll', iv.roll])}${b(["Mother's Name", iv.mother], ['Reg', iv.reg])}${b(['Date of Birth', iv.dob], ['Session', iv.session])}</div>`;
 }
-function semTableHTML(sd, showGpa) {
+function semTableHTML(sd) {
   const cs = sd.valid;
   const hasT = cs.some(e => e.theory !== '' && e.theory != null), hasI = cs.some(e => e.inter !== '' && e.inter != null), hasTot = cs.some(e => e.total != null);
   const row = (lab, fn) => `<tr><td class="rl">${lab}</td>${cs.map(e => `<td>${fn(e)}</td>`).join('')}</tr>`;
   const mv = v => (v === '' || v == null) ? '–' : fmt(v, 2);
   const a = sd.aggr;
-  return `<div class="sem-cap">${sd.sLabel}</div><table class="mt"><thead><tr><th class="rl"></th>${cs.map(e => `<th><div class="cd">${esc(e.code)}</div><div>${fmt(e.credit, 2)}</div></th>`).join('')}</tr></thead><tbody>
+  return `<div class="sem-cap">${sd.sLabel}</div><table class="mt"><thead><tr><th class="rl"></th>${cs.map(e => `<th><div class="cd">${esc(e.code)}</div><div>${fmtCredit(e.credit)}</div></th>`).join('')}</tr></thead><tbody>
     ${hasT ? row('Theory', e => mv(e.theory)) : ''}${hasI ? row('Inter. Theory', e => mv(e.inter)) : ''}${hasTot ? row('Total Marks', e => e.total != null ? fmt(e.total, 2) : '–') : ''}
-    ${row('Letter Grade', e => e.letter)}${row('Grade Point', e => fmt(e.gp, 2))}${row('PS', e => fmt(e.ps, 3))}</tbody></table>
-    ${showGpa ? `<div class="sem-gpa">Semester summary — TPS: <b>${fmt(a.tps, 3)}</b> &nbsp;·&nbsp; Credits: <b>${fmt(a.credits, 2)}</b> &nbsp;·&nbsp; EC: <b>${fmt(a.ec, 2)}</b> &nbsp;·&nbsp; GPA: <b>${a.cgpa == null ? '–' : fmt(a.cgpa, 2)}</b></div>` : ''}`;
+    ${row('Letter Grade', e => e.letter)}${row('Grade Point', e => fmt(e.gp, 2))}${row('PS', e => fmt(e.ps, 3))}</tbody></table>`;
 }
 function sumRowHTML(a) {
   return `<div class="sumrow"><div><b>TPS</b>${fmt(a.tps, 3)}</div><div><b>EC</b>${fmt(a.ec, 3)}</div><div><b>CGPA</b>${a.cgpa == null ? '–' : fmt(a.cgpa, 2)}</div><div><b>Remarks</b>${esc(a.remark)}</div></div>${a.superseded ? '<div class="note-small">Repeated courses: only the best attempt is counted in the totals above.</div>' : ''}`;
@@ -610,7 +617,7 @@ function renderPrint() {
   applyPaper();
   $$('#segPaper button').forEach(b => b.classList.toggle('on', b.dataset.paper === state.print.paper));
   $$('#segPer button').forEach(b => b.classList.toggle('on', b.dataset.per === state.print.per));
-  $('#optSummary').checked = state.print.summary; $('#optSemGpa').checked = state.print.semGpa; $('#optWm').checked = state.print.watermark;
+  $('#optSummary').checked = state.print.summary; $('#optWm').checked = state.print.watermark;
 
   const { pages, sds } = buildPages(), iv = infoView(), errs = validateInfo();
   const warn = [], invalid = scopeRefs().map(semData).reduce((p, s) => p + s.invalid, 0);
@@ -628,7 +635,7 @@ function renderPrint() {
   let html = pages.map((p, idx) => {
     const a = aggregate(p.sems.flatMap(s => s.valid));
     const inner = headHTML(iv, `${YN(p.y)} year`, 'MARKS SHEET', legendHTML(p.sems)) + infoBlockHTML(iv)
-      + p.sems.map(sd => semTableHTML(sd, state.print.semGpa)).join('') + sumRowHTML(a) + footHTML(idx + 1, total);
+      + p.sems.map(sd => semTableHTML(sd)).join('') + sumRowHTML(a) + footHTML(idx + 1, total);
     return sheetShell(inner);
   }).join('');
   if (showSummary) {
@@ -643,7 +650,6 @@ function renderPrint() {
 $('#segPaper').addEventListener('click', e => { const b = e.target.closest('[data-paper]'); if (!b) return; state.print.paper = b.dataset.paper; save(); renderPrint(); });
 $('#segPer').addEventListener('click', e => { const b = e.target.closest('[data-per]'); if (!b) return; state.print.per = b.dataset.per; save(); renderPrint(); });
 $('#optSummary').addEventListener('change', e => { state.print.summary = e.target.checked; save(); renderPrint(); });
-$('#optSemGpa').addEventListener('change', e => { state.print.semGpa = e.target.checked; save(); renderPrint(); });
 $('#optWm').addEventListener('change', e => { state.print.watermark = e.target.checked; save(); renderPrint(); });
 $('#btnPrint').addEventListener('click', () => {
   const iv = infoView();
@@ -715,11 +721,13 @@ function drawInfo(c, w, iv, y) {
   });
   return y + 14 + 21 + 14;
 }
-function drawSemTable(c, w, sd, y, showGpa) {
+function drawSemTable(c, w, sd, y) {
   const cs = sd.valid, n = cs.length, labW = Math.min(112, w * 0.12), colW = (w - labW) / n, fs = Math.max(7, Math.min(12.5, colW / 7));
+  const hh = 38, rh = 22;
   T(c, sd.sLabel, w / 2, y + 14, { size: 13, b: true, align: 'center' }); y += 26;
-  cs.forEach((e, i) => { const x = labW + i * colW + 3; T(c, e.code, x, y + 11, { size: fs, max: colW - 5, min: 6 }); T(c, fmt(e.credit, 2), x, y + 26, { size: fs }); });
-  y += 33; hline(c, 0, w, y, 0.9);
+  rbox(c, 0, y, labW, hh, 0.9);
+  cs.forEach((e, i) => { const x = labW + i * colW; rbox(c, x, y, colW, hh, 0.9); T(c, e.code, x + 5, y + 15, { size: fs, max: colW - 9, min: 6 }); T(c, fmtCredit(e.credit), x + 5, y + 31, { size: fs }); });
+  y += hh;
   const hasT = cs.some(e => e.theory !== '' && e.theory != null), hasI = cs.some(e => e.inter !== '' && e.inter != null), hasTot = cs.some(e => e.total != null);
   const mv = v => (v === '' || v == null) ? '–' : fmt(v, 2);
   const rows = [];
@@ -728,16 +736,11 @@ function drawSemTable(c, w, sd, y, showGpa) {
   if (hasTot) rows.push(['Total Marks', e => e.total != null ? fmt(e.total, 2) : '–']);
   rows.push(['Letter Grade', e => e.letter], ['Grade Point', e => fmt(e.gp, 2)], ['PS', e => fmt(e.ps, 3)]);
   rows.forEach(([lab, fn]) => {
-    y += 21; T(c, lab, 4, y - 6, { size: 12, max: labW - 8, min: 7 });
-    cs.forEach((e, i) => T(c, fn(e), labW + i * colW + 3, y - 6, { size: fs, max: colW - 5, min: 6 }));
+    rbox(c, 0, y, labW, rh, 0.9); T(c, lab, 5, y + rh - 7, { size: 12, max: labW - 9, min: 7 });
+    cs.forEach((e, i) => { const x = labW + i * colW; rbox(c, x, y, colW, rh, 0.9); T(c, fn(e), x + 5, y + rh - 7, { size: fs, max: colW - 9, min: 6 }); });
+    y += rh;
   });
-  y += 4;
-  if (showGpa) {
-    const a = sd.aggr; y += 12;
-    T(c, `Semester summary — TPS: ${fmt(a.tps, 3)}  ·  Credits: ${fmt(a.credits, 2)}  ·  EC: ${fmt(a.ec, 2)}  ·  GPA: ${a.cgpa == null ? '–' : fmt(a.cgpa, 2)}`, 0, y, { size: 10.5, color: '#222', max: w });
-    y += 6;
-  }
-  return y + 6;
+  return y + 12;
 }
 function drawSummaryTable(c, w, sds, a, y) {
   T(c, 'Semester-wise summary', w / 2, y + 14, { size: 13, b: true, align: 'center' }); y += 38;
@@ -772,7 +775,7 @@ function drawPage(c, w, spec, iv, logo) {
   if (spec.kind === 'sem') {
     y = drawHeader(c, w, iv, spec.yearLine, 'MARKS SHEET', spec.sems.some(sd => sd.valid.some(e => e.name)) ? spec.sems : [], logo);
     y = drawInfo(c, w, iv, y);
-    spec.sems.forEach(sd => { y = drawSemTable(c, w, sd, y, state.print.semGpa); });
+    spec.sems.forEach(sd => { y = drawSemTable(c, w, sd, y); });
   } else {
     y = drawHeader(c, w, iv, spec.yearLine, 'CUMULATIVE RESULT', [], logo);
     y = drawInfo(c, w, iv, y);
