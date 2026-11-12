@@ -1,6 +1,6 @@
 /* Service worker – makes the site work offline and installable.
    When you change any file, bump CACHE (v1 -> v2 ...) so users get the update. */
-const CACHE = 'iu-cgpa-v5';
+const CACHE = 'iu-cgpa-v6';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'js/data.js', 'js/app.js', 'manifest.webmanifest',
   'assets/logo.png', 'assets/icons/icon-192.png', 'assets/icons/icon-512.png', 'assets/icons/icon-maskable-512.png'
