@@ -284,3 +284,8 @@ table.plain td.r,table.plain th.r{text-align:right}
 /* footer credit */
 footer a.credit{color:var(--brand);font-weight:800;text-decoration:none;border-bottom:2px solid rgba(14,122,95,.35)}
 footer a.credit:hover{color:var(--brand-d);border-bottom-color:var(--brand-d)}
+
+dialog#installHelp{border:1px solid var(--line);border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.25);padding:20px;max-width:440px;width:calc(100% - 32px);color:var(--ink);background:#fff}
+dialog#installHelp::backdrop{background:rgba(10,40,33,.45)}
+dialog#installHelp h3{margin-bottom:8px}
+@media print{dialog#installHelp{display:none!important}}
