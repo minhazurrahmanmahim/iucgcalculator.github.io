@@ -683,6 +683,15 @@ function downloadBlob(name, blob) {
   a.href = url; a.download = name; document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
 }
+let imgUrls = [];
+function closeImgDialog() { const d = $('#imgDialog'); if (d.open) d.close(); imgUrls.forEach(o => URL.revokeObjectURL(o.url)); imgUrls = []; $('#imgList').innerHTML = ''; }
+$('#imgClose').addEventListener('click', closeImgDialog);
+$('#imgDialog').addEventListener('cancel', () => setTimeout(closeImgDialog, 0));
+$('#imgList').addEventListener('click', async e => {
+  const b = e.target.closest('[data-share]'); if (!b) return;
+  const it = imgUrls[+b.dataset.share]; if (!it) return;
+  try { await navigator.share({ files: [it.file] }); } catch (_) { /* cancelled */ }
+});
 $('#btnImage').addEventListener('click', async () => {
   const btn = $('#btnImage'), sheets = $$('#preview .sheet'), fmt = $('#imgFmt').value;
   if (!sheets.length) return;
@@ -691,13 +700,21 @@ $('#btnImage').addEventListener('click', async () => {
     fitSheets();
     const [css, logo] = await Promise.all([getCss(), logoDataURL()]);
     const iv = infoView(), base = 'IU-Marksheet-' + ((iv.roll || iv.name || 'result').replace(/[^\w-]+/g, '_'));
+    closeImgDialog(); imgUrls = [];
     for (let i = 0; i < sheets.length; i++) {
-      const blob = await sheetToBlob(sheets[i], fmt, css, logo);
-      downloadBlob(`${base}-page${i + 1}.${fmt}`, blob);
-      if (i < sheets.length - 1) await new Promise(r => setTimeout(r, 500));
+      const blob = await sheetToBlob(sheets[i], fmt, css, logo), name = `${base}-page${i + 1}.${fmt}`;
+      const file = new File([blob], name, { type: blob.type });
+      imgUrls.push({ url: URL.createObjectURL(blob), name, file });
     }
-    toast(sheets.length > 1 ? `${sheets.length} images saved` : 'Image saved');
-  } catch (e) { toast('Could not make the image on this browser. Use Print → Save as PDF instead.'); }
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [imgUrls[0].file] }));
+    $('#imgList').innerHTML = imgUrls.map((o, i) => `<figure class="imgfig"><img src="${o.url}" alt="Page ${i + 1}"><figcaption><b>Page ${i + 1}</b>
+      <a class="btn small primary" href="${o.url}" download="${esc(o.name)}">Download</a>
+      ${canShare ? `<button class="btn small ghost" data-share="${i}">Share / Save to Photos</button>` : ''}</figcaption></figure>`).join('');
+    $('#imgDialog').showModal ? $('#imgDialog').showModal() : $('#imgDialog').setAttribute('open', '');
+  } catch (e) {
+    console.error(e);
+    toast('Could not make the image on this browser (' + (e && e.message ? e.message : 'error') + '). Use Print → Save as PDF instead.');
+  }
   btn.textContent = old; btn.disabled = false;
 });
 window.addEventListener('beforeprint', () => { if (curTab !== 'print') { renderScopes(); curTab = 'print'; $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'tab-print')); renderPrint(); } fitSheets(); });
